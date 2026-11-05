@@ -535,8 +535,8 @@ class ClaudeBackend:
 class Translator:
     def __init__(self, dictionary: Dictionary, cache_path: Path,
                  backend: ClaudeBackend | None = None, batch_size: int = 40,
-                 batch_wait_s: float = 0.25, max_calls_per_hour: int = 300,
-                 max_calls_per_day: int = 1500):
+                 batch_wait_s: float = 0.25, max_calls_per_hour: int = 1000,
+                 max_calls_per_day: int = 10000):
         self.dictionary = dictionary
         self.cache = TranslationCache(cache_path)
         self.failures = FailureLog(cache_path.with_name("translation_failures.json"),
@@ -903,8 +903,8 @@ class Translator:
 
 
 def make_translator(dictionary: Dictionary, root: Path, enabled: bool, model: str,
-                    thinking: str = "disabled", max_calls_per_hour: int = 300,
-                    max_calls_per_day: int = 1500) -> Translator:
+                    thinking: str = "disabled", max_calls_per_hour: int = 1000,
+                    max_calls_per_day: int = 10000) -> Translator:
     backend = None
     if enabled:
         if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN") \

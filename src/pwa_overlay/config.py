@@ -48,8 +48,8 @@ class Config:
     # disabled: an A/B on real screens showed adaptive was no better, a bit slower,
     # and once blanked a real UI line
     mt_thinking: str = "disabled"   # disabled | adaptive
-    mt_max_calls_per_hour: int = 300
-    mt_max_calls_per_day: int = 1500
+    mt_max_calls_per_hour: int = 1000
+    mt_max_calls_per_day: int = 10000
     debug: bool = False
     dump_dir: str = ""              # save annotated frames here after each OCR
 
