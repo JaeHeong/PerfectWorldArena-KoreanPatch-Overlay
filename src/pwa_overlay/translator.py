@@ -602,6 +602,7 @@ class Translator:
         self.batch_size = batch_size
         self.batch_wait_s = batch_wait_s
         self.max_calls_per_hour = max_calls_per_hour
+        self.items = None   # CS2 item names (items.ItemNames), set once loaded
         self.capped = 0
         self.max_calls_per_day = max_calls_per_day
         self.version = 0                 # bumps when new translations arrive
@@ -642,6 +643,11 @@ class Translator:
                context: tuple[str, ...] = (), score: float | None = None,
                uncertain: bool = False, chars: tuple[tuple[str, float], ...] | None = None,
                dict_only: bool = False) -> Match | None:
+        items = self.items
+        if items is not None:
+            ko = items.lookup(text)   # official CS2 names: weapons, skins, conditions
+            if ko:
+                return Match(ko, "item")
         m = self.dictionary.lookup(text,
                                    allow_phrase=allow_phrase and not self.machine_translation)
         if m:
@@ -929,6 +935,10 @@ class Translator:
         screen, so the same word reads the same everywhere."""
         out = dict(self.dictionary.glossary_for(texts))
         joined = [normalize(t) for t in texts]
+        if self.items is not None:   # official CS2 weapon / condition names
+            for k, v in self.items.glossary_terms().items():
+                if k not in out and any(k in j for j in joined):
+                    out[k] = v
         for line in screen:
             masked, nums = mask_numbers(line.strip())
             k = cache_key(masked)

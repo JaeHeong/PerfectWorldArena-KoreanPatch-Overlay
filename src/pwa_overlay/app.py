@@ -121,6 +121,7 @@ class Controller(QObject):
         self.untranslated = UntranslatedLog(root / "logs" / "untranslated.txt")
         self.translator = self._make_translator()
         self.fx = FxRate(root / "data" / "fx_rate.json")
+        self._load_items()
         if cfg.show_krw:
             self.fx.refresh_async()   # background, only if the saved rate is 12+ h old
         self.analyzer = Analyzer(self.translator, cfg.ocr_params())
@@ -217,6 +218,28 @@ class Controller(QObject):
         self._save_setting("ocr_device", device)
         self.notify("OCR 모드", "GPU 가속 (빠름, 메모리 약 2GB)" if on
                     else "CPU (가벼움, 메모리 약 0.5GB)")
+
+    def _load_items(self) -> None:
+        """Official CS2 item names from the installed game, in the background. The
+        game files are re-read only after a CS2 update, and never while it runs."""
+        import threading
+
+        from .items import load_or_build
+
+        def work():
+            try:
+                allow = not win32.running_exes(self.games)
+                names = load_or_build(self.root / "data" / "cs2_items.json", allow)
+            except Exception:  # noqa: BLE001 (optional feature)
+                log.exception("CS2 item names not loaded")
+                return
+            if names is not None:
+                self.translator.items = names
+                self.translator.version += 1   # re-translate what is on screen
+            else:
+                log.info("CS2 item names: CS2 install not found (feature off)")
+
+        threading.Thread(target=work, name="cs2-items", daemon=True).start()
 
     def _display_text(self, ko: str) -> str:
         """What is drawn for a translation: yuan amounts get a won value."""

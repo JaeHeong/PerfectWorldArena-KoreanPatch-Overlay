@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "dist" / "PWAKoreanOverlay"
 EXCLUDE_DIRS = {"logs"}
 EXCLUDE_FILES = {Path("data") / "translation_failures.json", Path("config.json"),
-                 Path("data") / "fx_rate.json",
+                 Path("data") / "fx_rate.json", Path("data") / "cs2_items.json",
                  Path("data") / "translation_cache.json"}
 
 

@@ -58,6 +58,7 @@ FIX = {  # wrong or inconsistent translations
     "直¥{0}": "가치 ¥{0}",
     "天械匹配 {0}/{1}": "랭크 매칭 {0}/{1}",
     "梯匹配": "랭크 매칭",
+    "参考总价￥{0}": "참고 가격 ￥{0}",
 }
 
 DROP = [  # sentences with names baked in, now covered by the templates above

@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.26",
     "rapidfuzz>=3.6",
     "anthropic>=2.4.0",
+    "vpk==1.4.0",
 ]
 
 [dependency-groups]

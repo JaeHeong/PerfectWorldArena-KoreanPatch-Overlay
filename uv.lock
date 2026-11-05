@@ -434,6 +434,7 @@ dependencies = [
     { name = "pyqt6" },
     { name = "rapidfuzz" },
     { name = "rapidocr" },
+    { name = "vpk" },
 ]
 
 [package.dev-dependencies]
@@ -453,6 +454,7 @@ requires-dist = [
     { name = "pyqt6", specifier = ">=6.6" },
     { name = "rapidfuzz", specifier = ">=3.6" },
     { name = "rapidocr", specifier = ">=3.10" },
+    { name = "vpk", specifier = "==1.4.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -824,4 +826,13 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e3/05/b17359e1cefb4f909b5e40b1b90a496d987258916dbbf88e842c729f510e/urllib3-2.8.0.tar.gz", hash = "sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63", size = 458972, upload-time = "2026-09-15T19:29:36.253Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl", hash = "sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3", size = 135717, upload-time = "2026-09-15T19:29:34.577Z" },
+]
+
+[[package]]
+name = "vpk"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/70/d4/567a1c46a4c1efc646454868cfffa81e87760663cfddcc28dc9d273fb5ac/vpk-1.4.0.tar.gz", hash = "sha256:32ce0a2ca74f29e6b6614dc6e56b7724181c7b011f4de6040a138d4d8fe97040", size = 11516, upload-time = "2021-12-24T15:10:52.326Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/b9/b87009a8ad0db87d1b14bb0b2b474254b18ba740057f4ba8bae7cc790e5d/vpk-1.4.0-py2.py3-none-any.whl", hash = "sha256:021a40fa28eece9909dfce6f2b55abfd39fff22ac4a4a18ddf7a10afa4c1232f", size = 11168, upload-time = "2021-12-24T15:10:50.616Z" },
 ]
