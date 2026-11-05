@@ -367,3 +367,50 @@ def test_cap_lifts_and_static_screen_is_retranslated(tmp_path, small_dict):
     assert wait_for(lambda: t.lookup("界面文字一") is not None)
     assert t.lookup("界面文字一").ko == "화면 문구 1"
     t.close()
+
+
+def test_user_text_is_cached_but_never_shared(tmp_path, small_dict):
+    be = FakeBackend({"界面文字一": ("화면 문구 1", "", "", "ui"),
+                      "她说会永远爱着我": ("그녀는 영원히 나를 사랑한다고 했어", "", "", "user")})
+    t = make(tmp_path, small_dict, be)
+    t.lookup("界面文字一")
+    t.lookup("她说会永远爱着我")
+    assert wait_for(lambda: t.version > 0)
+    assert t.lookup("她说会永远爱着我").ko.startswith("그녀는")   # still shown here
+    shared = {e["zh"] for e in t.cache.shareable().values()}
+    assert shared == {"界面文字一"}                                # but never shared
+    t.close()
+
+
+def test_sightings_count_once_per_gap_and_survive_restart(tmp_path, small_dict):
+    from pwa_overlay.translator import TranslationCache, cache_key
+    c = TranslationCache(tmp_path / "c.json")
+    c.put_many([("界面文字一", "화면 문구 1", False, False, "ui")], "x")
+    k = cache_key("界面文字一")
+    t0 = c.data[k]["seen_at"]
+    assert c.data[k]["seen"] == 1                       # translated = seen once
+    for dt in (10, 600, 3000):                          # the same hour: no new count
+        c.mark_seen(k, t0 + dt)
+    assert c.data[k]["seen"] == 1
+    c.mark_seen(k, t0 + 3700)
+    c.mark_seen(k, t0 + 3800)
+    c.mark_seen(k, t0 + 7400)
+    assert c.data[k]["seen"] == 3
+    c.flush()
+    c2 = TranslationCache(tmp_path / "c.json")
+    assert c2.data[k]["seen"] == 3 and c2.data[k]["kind"] == "ui"
+    c2.put_many([("界面文字一", "고친 번역", False)], "review")   # a fix keeps both
+    assert c2.data[k]["seen"] == 3 and c2.data[k]["kind"] == "ui"
+    exported = tmp_path / "e.json"
+    c2.export_to(exported)
+    assert "seen" not in exported.read_text(encoding="utf-8")
+
+
+def test_template_hits_count_on_the_template(tmp_path, small_dict):
+    from pwa_overlay.translator import cache_key
+    t = make(tmp_path, small_dict, None)
+    t.cache.put_many([("玩家 {n0} 加入了房间", "플레이어 {n0} 님이 입장했습니다", False, True, "ui")], "x")
+    k = cache_key("玩家 {n0} 加入了房间")
+    t.cache.data[k]["seen_at"] = 0
+    assert t.lookup("玩家 Wind 加入了房间").ko == "플레이어 Wind 님이 입장했습니다"
+    assert t.cache.data[k]["seen"] == 2

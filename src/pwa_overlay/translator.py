@@ -108,7 +108,14 @@ class TranslationCache:
     Entry: {"zh", "ko" (None = KEEP: never translate), "by", "at", "uncertain"}.
     Template entries ("template": true) hold a sentence with the player names
     replaced by {n0}, {n1}...: any line of that shape is translated from them, and
-    no nickname is ever stored."""
+    no nickname is ever stored.
+    "kind" is Claude's call when it translated the line: "ui" (the platform's own
+    text) or "user" (written by players: posts, chat, status messages); user text
+    is never shared. "seen" counts separate sightings (at most one per SEEN_GAP_S),
+    so text that keeps coming back (menus) can be told from one-off text (posts)."""
+
+    SEEN_GAP_S = 3600.0   # one sighting per hour at most
+    FLUSH_S = 300.0       # sighting counts are saved at most every 5 minutes
 
     def __init__(self, path: Path):
         self.path = path
@@ -116,10 +123,30 @@ class TranslationCache:
         self._removed: set[str] = set()
         self.data: dict[str, dict] = self._read()
         self._compiled: list | None = None
+        self._dirty = False
+        self._last_flush = time.monotonic()
 
-    def match_template(self, masked: str) -> str | None:
-        """Korean (number slots still masked) for a line that fits a learned
-        template, with the names from the line filled in."""
+    def mark_seen(self, key: str, now: float | None = None) -> None:
+        """Count a sighting of a cached line (once per SEEN_GAP_S)."""
+        now = time.time() if now is None else now
+        with self.lock:
+            e = self.data.get(key)
+            if e is None or now - float(e.get("seen_at", 0)) < self.SEEN_GAP_S:
+                return
+            e["seen"] = int(e.get("seen", 0)) + 1
+            e["seen_at"] = now
+            self._dirty = True
+            if time.monotonic() - self._last_flush >= self.FLUSH_S:
+                self._write()
+
+    def flush(self) -> None:
+        with self.lock:
+            if self._dirty:
+                self._write()
+
+    def match_template(self, masked: str) -> tuple[str, str] | None:
+        """(Korean with number slots still masked, template key) for a line that
+        fits a learned template, with the names from the line filled in."""
         with self.lock:
             if self._compiled is None:
                 self._compiled = []
@@ -127,14 +154,14 @@ class TranslationCache:
                     if e.get("template") and e.get("ko"):
                         c = compile_template(e["zh"])
                         if c:
-                            self._compiled.append((c, e["ko"]))
+                            self._compiled.append((c, e["ko"], cache_key(e["zh"])))
                 # most fixed text first: "...的举报正在处理中" beats a shorter prefix
                 self._compiled.sort(key=lambda t: -len(t[0][0].pattern))
             compiled = list(self._compiled)
-        for c, ko_t in compiled:
+        for c, ko_t, key in compiled:
             values = match_template(c, masked)
             if values is not None:
-                return fill_template(ko_t, values)
+                return fill_template(ko_t, values), key
         return None
 
     def _read(self) -> dict[str, dict]:
@@ -170,6 +197,8 @@ class TranslationCache:
             disk.pop(k, None)
         self.data = disk
         self._compiled = None
+        self._dirty = False
+        self._last_flush = time.monotonic()
         snapshot = json.dumps(self.data, ensure_ascii=False, indent=1, sort_keys=True)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
@@ -177,16 +206,26 @@ class TranslationCache:
         os.replace(tmp, self.path)  # atomic: a crash never leaves a half-written file
 
     def put_many(self, entries: list[tuple], source: str) -> None:
-        """entries: (masked zh, masked ko or None for KEEP, uncertain[, template])."""
+        """entries: (masked zh, masked ko or None for KEEP, uncertain[, template
+        [, kind]]). A line just translated counts as seen once; an entry that is
+        replaced (a fix) keeps its sighting count and kind."""
         with self.lock:
             now = time.strftime("%Y-%m-%d %H:%M:%S")
             for masked_zh, masked_ko, uncertain, *rest in entries:
                 k = cache_key(masked_zh)
                 self._removed.discard(k)
+                old = self.data.get(k) or {}
                 e = {"zh": masked_zh, "ko": masked_ko, "by": source, "at": now,
                      "uncertain": bool(uncertain)}
                 if rest and rest[0]:
                     e["template"] = True
+                kind = rest[1] if len(rest) > 1 and rest[1] else old.get("kind")
+                if kind in ("ui", "user"):
+                    e["kind"] = kind
+                if old.get("seen"):
+                    e["seen"], e["seen_at"] = old["seen"], old.get("seen_at", 0)
+                else:
+                    e["seen"], e["seen_at"] = 1, time.time()
                 self.data[k] = e
             self._write()
 
@@ -235,6 +274,10 @@ class TranslationCache:
                          "at": str(e.get("at", "")), "uncertain": bool(e.get("uncertain"))}
                 if e.get("template"):
                     entry["template"] = True
+                if e.get("kind") in ("ui", "user"):
+                    entry["kind"] = e["kind"]
+                if mine and mine.get("seen"):   # this PC's sightings stay
+                    entry["seen"], entry["seen_at"] = mine["seen"], mine.get("seen_at", 0)
                 self.data[k] = entry
                 self._removed.discard(k)
             if added + updated == 0 and skipped == len(raw):
@@ -245,15 +288,22 @@ class TranslationCache:
 
     def shareable(self) -> dict[str, dict]:
         """Entries fit to give to other people: valid translations only. KEEP entries
-        are left out: they are mostly other players' nicknames seen on screen, and
-        only matter on this PC (to avoid asking about them again)."""
+        are left out (mostly other players' nicknames seen on screen), and so is text
+        Claude marked as written by players (posts, chat, status messages). Both only
+        matter on this PC, to avoid asking about them again."""
         with self.lock:
             return {k: e for k, e in self.data.items()
-                    if self.valid_entry(e) and e.get("ko") is not None}
+                    if self.valid_entry(e) and e.get("ko") is not None
+                    and e.get("kind") != "user"}
+
+    @staticmethod
+    def public_copy(e: dict) -> dict:
+        """An entry without this PC's sighting counts."""
+        return {k: v for k, v in e.items() if k not in ("seen", "seen_at")}
 
     def export_to(self, path: Path) -> int:
         """Write a copy of the cache for sharing (see shareable())."""
-        data = self.shareable()
+        data = {k: self.public_copy(e) for k, e in self.shareable().items()}
         Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True),
                               encoding="utf-8")
         return len(data)
@@ -345,6 +395,11 @@ line and its translation with each nickname replaced by {n0}, {n1}... in order \
 (keep {0}, {1} number slots as they are; zh_template must be the line exactly, \
 except the nicknames). Item, skin or event names in quotes are NOT nicknames. For \
 every other line return both as "".
+- kind: "ui" for the platform's own text (menus, buttons, labels, system messages \
+and notices, descriptions, event, mode, map and item names, official announcements). \
+"user" for text written by players: community post titles and contents, comments, \
+chat, status messages and signatures, nicknames, and names players gave to clans, \
+guilds, teams, rooms or servers. If unsure, "user".
 - Write Korean only: never leave Chinese characters in the output, not even one \
 (e.g. 国服 -> 중국 서버, never "국服").
 - "W" after a number is 万 (10,000): 100W -> 100만, 500W -> 500만.
@@ -369,8 +424,9 @@ OUTPUT_SCHEMA = {
                 "type": "object",
                 "properties": {"id": {"type": "integer"}, "ko": {"type": "string"},
                                "zh_template": {"type": "string"},
-                               "ko_template": {"type": "string"}},
-                "required": ["id", "ko", "zh_template", "ko_template"],
+                               "ko_template": {"type": "string"},
+                               "kind": {"type": "string", "enum": ["ui", "user"]}},
+                "required": ["id", "ko", "zh_template", "ko_template", "kind"],
                 "additionalProperties": False,
             },
         }
@@ -528,7 +584,8 @@ class ClaudeBackend:
                     and 0 <= i - ID_BASE < len(texts)):
                 continue
             zt, kt = t.get("zh_template") or "", t.get("ko_template") or ""
-            out[i - ID_BASE] = (t["ko"], zt, kt) if zt and kt else t["ko"]
+            kind = t.get("kind") if t.get("kind") in ("ui", "user") else None
+            out[i - ID_BASE] = (t["ko"], zt, kt, kind)
         return out
 
 
@@ -606,11 +663,13 @@ class Translator:
                 return None  # KEEP: a nickname or fragment; leave it as it is
             filled = unmask(entry["ko"], nums)
             if filled is not None:
+                self.cache.mark_seen(cache_key(masked))
                 return Match(filled, "cache")
-        ko_t = self.cache.match_template(masked)
-        if ko_t is not None:
-            filled = unmask(ko_t, nums)
+        hit = self.cache.match_template(masked)
+        if hit is not None:
+            filled = unmask(hit[0], nums)
             if filled is not None:
+                self.cache.mark_seen(hit[1])
                 return Match(filled, "template")
         if uncertain and chars:
             m = self._confident_char_match(chars)
@@ -698,6 +757,7 @@ class Translator:
         with self._cv:
             self._stop = True
             self._cv.notify()
+        self.cache.flush()   # sighting counts gathered since the last save
 
     # ---- worker -----------------------------------------------------------
     def _run(self) -> None:
@@ -777,10 +837,14 @@ class Translator:
         screen = list(batch[0].context)[:60]
         glossary = self._glossary(texts, screen)
         result, failed = self._call(texts, glossary, screen, uncertain, budgets)
-        templates = {}
+        templates, kinds = {}, {}
         for i, v in list(result.items()):
             if isinstance(v, tuple):
-                result[i], templates[i] = v[0], (v[1], v[2])
+                result[i] = v[0]
+                if v[1] and v[2]:
+                    templates[i] = (v[1], v[2])
+                if len(v) > 3 and v[3]:
+                    kinds[i] = v[3]
 
         # Hangul mixed with leftover Chinese: one cheap retry, those lines only
         mixed = [i for i, ko in result.items() if has_cjk(ko) and _HANGUL.search(ko)]
@@ -823,9 +887,9 @@ class Translator:
                 continue
             if tpl:
                 # store the shape, not the line: the nickname never reaches the cache
-                good.append((tpl[0], tpl[1], uncertain[i], True))
+                good.append((tpl[0], tpl[1], uncertain[i], True, kinds.get(i)))
             else:
-                good.append((masked, ko, uncertain[i]))
+                good.append((masked, ko, uncertain[i], False, kinds.get(i)))
         if bad:
             self.failures.record(bad)
         if good:
