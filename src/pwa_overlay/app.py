@@ -280,6 +280,10 @@ class Controller(QObject):
         if win32.foreground_exe().lower() in self.games:
             self._go_idle(now, "게임 중 · 일시 정지", game=True)
             return
+        # 2. our own tray menu / dialogs took the focus: keep showing what we had
+        #    (no capture: the menu may sit over the client)
+        if win32.foreground_pid() == self.own_pid:
+            return
         game_running = bool(win32.running_exes(self.games))
         ocr = self.analyzer.ocr
         ocr.force_cpu = game_running and not self.cfg.allow_gpu_while_game_running

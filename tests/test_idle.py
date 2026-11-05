@@ -179,3 +179,15 @@ def test_gpu_toggle_switches_engine_and_is_remembered(tmp_path):
     assert not ctl.analyzer.ocr.loaded        # reloads with the new device on next OCR
     assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8")) == \
         {"tick_ms": 100, "ocr_device": "gpu"}  # other settings kept
+
+
+def test_tray_menu_open_keeps_the_overlay(monkeypatch):
+    monkeypatch.setattr(win32, "foreground_exe", lambda: "PWAKoreanOverlay.exe")
+    monkeypatch.setattr(win32, "foreground_pid", lambda: 777)
+    monkeypatch.setattr(win32, "find_target_windows",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("looked")))
+    ctl = make_controller()
+    ctl.own_pid = 777
+    ctl.overlay.visible = True
+    ctl._tick()
+    assert ctl.overlay.visible   # still showing the translations while the menu is open

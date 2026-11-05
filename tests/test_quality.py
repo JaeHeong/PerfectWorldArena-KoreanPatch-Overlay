@@ -232,3 +232,17 @@ def test_bom_and_broken_files_never_stop_the_app(tmp_path):
     cache = tmp_path / "c.json"
     cache.write_text('{"k": {"zh": "关闭", "ko": "닫기", "at": "x"}}', encoding="utf-8-sig")
     assert TranslationCache(cache).get("关闭")["ko"] == "닫기"
+
+
+def test_animated_artwork_behind_text_keeps_the_translation():
+    rng = np.random.default_rng(3)
+    frame = rng.integers(40, 120, (60, 240, 3), dtype=np.uint8)   # busy artwork
+    frame[20:36, 30:200:12] = 250                                  # bright glyph strokes
+    item = translate_lines(frame, [L(26, 16, 206, 24, "国服战令下")], Exact()).items[0]
+    moved = frame.copy()
+    bg = (moved < 200).all(axis=2)
+    moved[bg] = rng.integers(40, 120, (int(bg.sum()), 3), dtype=np.uint8)  # artwork animates
+    assert not signature_changed(moved, item)
+    changed = frame.copy()
+    changed[20:36, 30:110:12] = 70                                 # half the glyphs change
+    assert signature_changed(changed, item)

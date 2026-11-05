@@ -81,6 +81,7 @@ class Item:
     uncertain: bool = False
     gray: np.ndarray | None = field(default=None, repr=False)  # OCR-time gray crop
     bg_lum: float = 0.0
+    ink_lum: float = -1.0  # gray level of the glyphs at OCR time (-1: unknown)
 
 
 @dataclass
@@ -165,6 +166,10 @@ class OcrEngine:
             "Global.log_level": "error",
             "Global.max_side_len": 4096,      # default (2000) would undo upscaling
             "Det.ocr_version": OCRVersion.PPOCRV6, "Det.model_type": size,
+            # never upscale for detection: the default ("min" side to 736) blows a
+            # 64x800 side strip of the client up to 736x9200 (1+ GB spikes, seconds
+            # of CPU). UI text is already at native size; only shrink huge frames.
+            "Det.limit_type": "max", "Det.limit_side_len": 2048,
             "Rec.ocr_version": OCRVersion.PPOCRV6, "Rec.model_type": size,
             "EngineConfig.onnxruntime.use_dml": use_gpu,
             "EngineConfig.onnxruntime.intra_op_num_threads": threads,
@@ -530,8 +535,11 @@ def _make_item(frame, gray, group: list[Line], ko: str, method: str, pad: int,
         fill = raw
     x0, y0, x1, y1 = padded
     bg_lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+    crop = gray[y0:y1, x0:x1].copy()
+    far = np.abs(crop.astype(np.int16) - bg_lum) > INK_DIFF
+    ink_lum = float(np.median(crop[far])) if far.any() else -1.0
     return Item(x0, y0, x1, y1, zh, ko, method, bg, fg, len(group), fill, font_px, art,
-                uncertain, gray[y0:y1, x0:x1].copy(), bg_lum)
+                uncertain, crop, bg_lum, ink_lum)
 
 
 def signature_changed(frame_or_gray: np.ndarray, item: Item) -> bool:
@@ -546,9 +554,15 @@ def signature_changed(frame_or_gray: np.ndarray, item: Item) -> bool:
     old = item.gray.astype(np.int16)
     if cur.shape != old.shape:
         return True
-    ink = (np.abs(old - item.bg_lum) > INK_DIFF) | (np.abs(cur - item.bg_lum) > INK_DIFF)
+    if item.ink_lum >= 0:
+        # glyph pixels only: far from the background AND close to the text's own
+        # gray level, so a moving background (even artwork) behind the text is
+        # ignored, while a changed glyph (one digit) still changes its strokes
+        ink = (np.abs(old - item.bg_lum) > INK_DIFF) & (np.abs(old - item.ink_lum) < 45)
+    else:
+        ink = (np.abs(old - item.bg_lum) > INK_DIFF) | (np.abs(cur - item.bg_lum) > INK_DIFF)
     changed = (np.abs(cur - old) > INK_DIFF) & ink
-    return int(changed.sum()) >= INK_CHANGED_PIXELS
+    return int(changed.sum()) >= max(INK_CHANGED_PIXELS, 0.04 * int(ink.sum()))
 
 
 # ---- translation units ------------------------------------------------------------
