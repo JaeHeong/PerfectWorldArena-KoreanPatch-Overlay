@@ -324,6 +324,11 @@ class Controller(QObject):
             draw += draw_items(st.items, st.lines, w.rect.w, w.rect.x, w.rect.y, w.rect.h)
         n = sum(len(s.items) for s in self.states.values())
         pending = self.translator.pending_count()
+        capped = getattr(self.translator, "capped", 0)
+        if capped != getattr(self, "_seen_capped", 0):
+            self._seen_capped = capped
+            self.notify("번역 한도", "API 호출 한도에 도달해 잠시 사전/캐시만 씁니다.\n"
+                        "한도가 풀리면 보고 있던 화면을 자동으로 다시 번역합니다.")
         self.status = (f"번역 중 · 창 {len(windows)}개 · 문구 {n}개"
                        + (f" · 번역 대기 {pending}개" if pending else "")
                        + f" · {self.translator.status} · OCR {ocr.device}")

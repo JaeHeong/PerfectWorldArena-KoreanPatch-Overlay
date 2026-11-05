@@ -535,7 +535,7 @@ class ClaudeBackend:
 class Translator:
     def __init__(self, dictionary: Dictionary, cache_path: Path,
                  backend: ClaudeBackend | None = None, batch_size: int = 40,
-                 batch_wait_s: float = 0.25, max_calls_per_hour: int = 120,
+                 batch_wait_s: float = 0.25, max_calls_per_hour: int = 300,
                  max_calls_per_day: int = 1500):
         self.dictionary = dictionary
         self.cache = TranslationCache(cache_path)
@@ -545,6 +545,7 @@ class Translator:
         self.batch_size = batch_size
         self.batch_wait_s = batch_wait_s
         self.max_calls_per_hour = max_calls_per_hour
+        self.capped = 0
         self.max_calls_per_day = max_calls_per_day
         self.version = 0                 # bumps when new translations arrive
         self.status = "사전만 사용" if backend is None else "Claude 번역 사용"
@@ -665,6 +666,8 @@ class Translator:
     RECHECK_S = 2.5
     _recheck: threading.Timer | None = None
 
+    CAP_POLL_S = 30.0
+
     def _schedule_recheck(self) -> None:
         """Bump `version` shortly, so the app re-runs lookups on the last OCR result
         (no new OCR needed): deferred shaky lines that are still there get queued."""
@@ -710,8 +713,14 @@ class Translator:
                 return
             if not self._within_caps():
                 with self._cv:
-                    self._pending.clear()  # re-queued by later OCR once the window frees
-                time.sleep(30)
+                    self._pending.clear()
+                log.warning("call cap reached: %s", self.status)
+                self.capped += 1          # the app shows a notice once per hit
+                while not self._stop and self.backend is not None                         and not self._within_caps():
+                    time.sleep(self.CAP_POLL_S)
+                self.status = "Claude 번역 사용"
+                # a static screen gets no new OCR: re-run lookups on what is shown now
+                self.version += 1
                 continue
             with self._cv:
                 keys = list(self._pending)[: self.batch_size]
@@ -894,7 +903,7 @@ class Translator:
 
 
 def make_translator(dictionary: Dictionary, root: Path, enabled: bool, model: str,
-                    thinking: str = "disabled", max_calls_per_hour: int = 120,
+                    thinking: str = "disabled", max_calls_per_hour: int = 300,
                     max_calls_per_day: int = 1500) -> Translator:
     backend = None
     if enabled:

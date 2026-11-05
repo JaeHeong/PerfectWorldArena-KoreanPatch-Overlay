@@ -350,3 +350,20 @@ def test_template_needs_a_real_fixed_part():
     assert compile_template("{n0}了") is None
     assert compile_template("{n0}的包") is None
     assert compile_template("恭喜 {n0} 获得") is not None
+
+
+def test_cap_lifts_and_static_screen_is_retranslated(tmp_path, small_dict):
+    be = FakeBackend({"界面文字一": "화면 문구 1"})
+    t = make(tmp_path, small_dict, be, max_calls_per_hour=1)
+    t.CAP_POLL_S = 0.05
+    be.usage.calls.append(time.time())        # an earlier call already used the hour
+    v0 = t.version
+    t.lookup("界面文字一")
+    assert wait_for(lambda: t.capped == 1)
+    assert be.calls == []                      # nothing sent while capped
+    be.usage.calls.clear()                     # the hour rolls over
+    assert wait_for(lambda: t.version > v0)    # app is told to look at the screen again
+    t.lookup("界面文字一")
+    assert wait_for(lambda: t.lookup("界面文字一") is not None)
+    assert t.lookup("界面文字一").ko == "화면 문구 1"
+    t.close()
