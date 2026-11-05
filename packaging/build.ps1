@@ -47,6 +47,6 @@ foreach ($f in @("user_dict.json", "glossary.json")) {
 }
 Copy-Item -Force README.md $app
 Copy-Item -Force LICENSE $app
-Copy-Item -Force dataLICENSE.md $data
+Copy-Item -Force data\LICENSE.md $data
 Copy-Item -Force packaging\icon.ico $app
 Write-Host "built: $app\PWAKoreanOverlay.exe"
