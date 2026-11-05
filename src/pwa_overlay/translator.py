@@ -59,6 +59,7 @@ def unmask(template: str, nums: list[str]) -> str | None:
     return _PH_RE.sub(lambda m: nums[int(m.group(1))], template)
 
 
+_BUDGET_ECHO = re.compile(r"\s*\(≤\s*\d+\s*자\)")
 _NAME_PH = re.compile(r"\{n(\d+)\}")  # nickname slots in learned templates
 
 
@@ -127,6 +128,8 @@ class TranslationCache:
                         c = compile_template(e["zh"])
                         if c:
                             self._compiled.append((c, e["ko"]))
+                # most fixed text first: "...的举报正在处理中" beats a shorter prefix
+                self._compiled.sort(key=lambda t: -len(t[0][0].pattern))
             compiled = list(self._compiled)
         for c, ko_t in compiled:
             values = match_template(c, masked)
@@ -790,7 +793,7 @@ class Translator:
             if ko is None:
                 bad.append(keys[i])
                 continue
-            ko = ko.strip()
+            ko = _BUDGET_ECHO.sub("", ko).strip()   # the (≤N자) hint echoed back
             if ko == "" or normalize(ko) == normalize(masked):
                 if self._may_keep(masked):
                     good.append((masked, None, uncertain[i]))  # KEEP: never send again
