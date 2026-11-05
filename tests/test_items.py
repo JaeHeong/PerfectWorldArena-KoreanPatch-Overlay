@@ -80,3 +80,13 @@ def test_item_names_come_before_cache_and_dictionary(tmp_path):
     t.items = names()
     assert t.lookup("熊刀").ko == "우르수스 칼"
     assert t.lookup("刺刀（★）| 虎牙").ko == "총검 (★) | 호랑이 이빨"
+
+
+def test_more_ocr_shapes():
+    n = names()
+    assert n.lookup("(久经沙场)") == "(현장에서 쓰인)"
+    assert n.lookup("(久经…") == "(현장에서 쓰인)"
+    assert n.lookup("刺刀（★）Ⅰ虎牙") == "총검 (★) | 호랑이 이빨"
+    assert n.lookup("AK-47 黄金藤蔓") == "AK-47 | 황금 아라베스크"
+    assert n.lookup("开始 黄金藤蔓") is None     # a space after an unknown word: not a name
+    assert n.lookup("驾驶手套（★）") == "운전용 장갑 (★)"

@@ -59,6 +59,8 @@ FIX = {  # wrong or inconsistent translations
     "天械匹配 {0}/{1}": "랭크 매칭 {0}/{1}",
     "梯匹配": "랭크 매칭",
     "参考总价￥{0}": "참고 가격 ￥{0}",
+    "参考价值¥": "참고 가치 ¥",
+    "我叁与的": "참여 내역",
 }
 
 DROP = [  # sentences with names baked in, now covered by the templates above

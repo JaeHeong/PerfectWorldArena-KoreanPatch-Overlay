@@ -24,6 +24,9 @@ _TOK = re.compile(r'^\s*"([^"]+)"\s+"((?:[^"\\]|\\.)*)"', re.M)
 _CJK = re.compile(r"[一-鿿]")
 # "weapon | skin": OCR often reads the bar as l, I or 1 when it is glued to the name
 _GLUED = re.compile(r"(?<=[0-9A-Za-z一-鿿）)★])\s*[Il1]\s*(?=[一-鿿])")
+# ...or not read at all: "M4A4 破浪狂飙" (only after a known weapon, see _split)
+_SPACED = re.compile(r"(?<=[0-9A-Za-z）)★])\s+(?=[一-鿿])")
+_PAREN = re.compile(r"^\s*[（(]\s*(?P<w>[^（()）]+?)\s*[）)]?\s*$")
 _WEAR_TAIL = re.compile(r"^(?P<skin>.+?)\s*[（(]\s*(?P<wear>[^（()）]+?)\s*[）)]?\s*$")
 _STAR = re.compile(r"\s*[（(]?\s*★\s*[）)]?\s*")
 _STATTRAK = re.compile(r"^\s*StatTrak\S*\s*", re.I)
@@ -107,11 +110,11 @@ class ItemNames:
     def _split(self, s: str) -> tuple[str, str] | None:
         """(left, right) of "weapon | skin". A real bar wins; a bar misread as l/I/1
         counts only where the part before it is a known weapon."""
-        bar = re.search(r"\s*[|｜丨]\s*", s)
+        bar = re.search(r"\s*[|｜丨Ⅰ]\s*", s)
         if bar:
             left, right = s[:bar.start()], s[bar.end():]
             return (left, right) if _CJK.search(right) else None
-        for m in _GLUED.finditer(s):
+        for m in list(_GLUED.finditer(s)) + list(_SPACED.finditer(s)):
             left = _STAR.sub("", _STATTRAK.sub("", s[:m.start()])).strip()
             if _key(left) in self.left:
                 return s[:m.start()], s[m.end():]
@@ -127,6 +130,13 @@ class ItemNames:
             return self.wear[k]
         if k in self.left and _CJK.search(s):
             return self.left[k]
+        bare = _STAR.sub("", s).strip()   # "运动手套（★）" on its own line
+        if "★" in s and _key(bare) in self.left:
+            return f"{self.left[_key(bare)]} (★)"
+        p = _PAREN.match(s)   # a condition on its own line: "(久经沙场)", "(久经…"
+        if p:
+            w = self._wear(p.group("w"))
+            return f"({w})" if w else None
         split = self._split(s)
         if split is None:
             return None
