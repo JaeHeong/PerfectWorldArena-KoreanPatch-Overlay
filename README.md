@@ -8,6 +8,11 @@
 
 > **비공식 도구입니다.** 완미세계(Perfect World)와 관련이 없습니다. 클라이언트 파일, 메모리, 프로세스를 건드리지 않고 화면 위에 그리기만 하지만, 안티치트나 약관상 문제가 없다고 보장하지는 않습니다. **사용에 따른 책임은 사용자에게 있습니다.**
 
+## 예시 화면
+![번역된 완미 메인 화면](docs/screenshot-home.webp)
+
+완미 메인 화면에 한국어를 덮어 그린 모습입니다.
+
 ## 다운로드
 [Releases](https://github.com/JaeHeong/PerfectWorldArena-KoreanPatch-Overlay/releases)에서 최신 zip을 받아 원하는 곳에 압축을 풀고 `PWAKoreanOverlay.exe`를 실행합니다. Windows 10(2004 이상) 또는 11, 64비트가 필요합니다. 처음 실행할 때 "Windows의 PC 보호" 경고가 뜨면 **추가 정보 → 실행**을 누르면 됩니다. 서명되지 않은 실행 파일이라 그렇습니다.
 
