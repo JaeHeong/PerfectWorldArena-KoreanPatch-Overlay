@@ -146,9 +146,22 @@ uv run python -m pwa_overlay --target python.exe --title PWA-FAKE-CLIENT --alway
   ```
 - 친구에게 따로 줄 때는 트레이의 **"번역 캐시 내보내기"**를, 받은 쪽은 **"번역 캐시 가져오기"**를 쓰면 됩니다. 내보내기에도 "그대로 둠" 항목은 들어가지 않습니다.
 
-## 출처와 라이선스
-- 이 프로그램의 코드는 [GPL-3.0](LICENSE)으로 배포합니다. 화면 표시에 쓰는 PyQt6가 GPL이기 때문입니다.
-- `data/mappings/`의 기본 번역 데이터는 [Midori-D/PerfectWorldArena-KoreanPatch](https://github.com/Midori-D/PerfectWorldArena-KoreanPatch)(Midori, Team Ataks)의 한국어 번역을 바탕으로 했습니다. 이 데이터에는 원 프로젝트의 라이선스([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/))가 적용되며, **상업적으로 이용할 수 없습니다**. 몇 군데는 오타나 충돌을 바로잡았습니다.
-- OCR은 [RapidOCR](https://github.com/RapidAI/RapidOCR)와 PaddleOCR의 PP-OCRv6 모델(Apache-2.0)을, 번역은 Anthropic의 Claude API를 사용합니다.
-- 완미세계, Perfect World Arena, Counter-Strike의 상표와 게임 내 문구, 이미지에 대한 권리는 각 권리자에게 있습니다.
+## 출처와 라이선스 / License
+**비상업적 이용만 허용되는 부분이 있습니다.** 부분마다 라이선스가 다릅니다.
 
+| 대상 | 라이선스 | 상업적 이용 |
+|---|---|---|
+| 프로그램 코드 (`src/`, `packaging/`, `tests/`) | [GPL-3.0](LICENSE) | 가능 (GPL 조건 준수, 화면 표시에 쓰는 PyQt6가 GPL이기 때문) |
+| 이 프로젝트의 번역 데이터 (`data/glossary.json`, `data/user_dict.json`, `data/translation_cache.shared.json`) | [CC BY-NC 4.0](data/LICENSE.md) | **불가** (별도 허락 필요) |
+| 기본 번역 데이터 (`data/mappings/`) | [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) | **불가** (Midori-D의 허락 필요) |
+
+- **허용:** 개인적·교육적·비상업적 사용, 수정, 재배포 (번역 데이터는 출처 표시)
+- **허락 필요:** 번역 데이터를 쓰는 유료 판매, 유료 서비스, 수익을 위한 재배포. 문의는 GitHub Issues로 해 주세요.
+- **배포 zip:** 위 번역 데이터가 함께 들어 있으므로 **배포본 전체는 비상업적으로만** 쓸 수 있습니다.
+
+**출처**
+- `data/mappings/`는 [Midori-D/PerfectWorldArena-KoreanPatch](https://github.com/Midori-D/PerfectWorldArena-KoreanPatch)(Midori, Team Ataks)의 한국어 번역을 바탕으로 했습니다. 몇 군데는 오타나 충돌을 바로잡았습니다.
+- OCR은 [RapidOCR](https://github.com/RapidAI/RapidOCR)와 PaddleOCR의 PP-OCRv6 모델(Apache-2.0)을, 번역은 Anthropic의 Claude API를 사용합니다.
+- 완미세계, Perfect World Arena, Counter-Strike의 상표, 중국어 원문, 게임 이미지(예시 스크린샷 포함)는 위 라이선스에 포함되지 않으며, 권리는 각 권리자에게 있습니다.
+
+**English summary.** Code: GPL-3.0. Korean translation data made for this project: CC BY-NC 4.0. `data/mappings/` (based on Midori-D/PerfectWorldArena-KoreanPatch): PolyForm Noncommercial 1.0.0. The release zip bundles the noncommercial data, so it may be used for noncommercial purposes only. Trademarks, Chinese source text and game images belong to their respective owners.

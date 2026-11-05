@@ -46,5 +46,7 @@ foreach ($f in @("user_dict.json", "glossary.json")) {
     if ((Test-Path "data\$f") -and -not (Test-Path $dst)) { Copy-Item "data\$f" $dst }
 }
 Copy-Item -Force README.md $app
+Copy-Item -Force LICENSE $app
+Copy-Item -Force dataLICENSE.md $data
 Copy-Item -Force packaging\icon.ico $app
 Write-Host "built: $app\PWAKoreanOverlay.exe"
