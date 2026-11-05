@@ -61,7 +61,7 @@ def main() -> int:
         # the nickname-free shared cache (merged into the local cache on first start)
         data = ROOT / "data"
         files = sorted((data / "mappings").glob("*.json")) + [
-            data / "glossary.json", data / "user_dict.json", data / "translation_cache.shared.json"]
+            data / "glossary.json", data / "user_dict.json", data / "translation_cache.shared.json", data / "LICENSE.md"]
         for path in files:
             if not path.exists():
                 continue

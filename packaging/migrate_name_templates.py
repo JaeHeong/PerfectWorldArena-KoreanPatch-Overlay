@@ -16,6 +16,7 @@ K2 = '{0}-{1}-{2} {3}:{4}에 플레이어 "'
 
 TEMPLATES = {
     "{n0}正在天梯激战": "{n0} 랭크 대전 중",
+    "我们已经是好友啦，快...{n0}": "우리는 이미 친구예요, 빨리... {n0}",
     "{n0}(游戏中)": "{n0} (게임 중)",
     "{n0}抖音直播": "{n0} 더우인 라이브",
     "{n0}抖音直播天梯匹配": "{n0} 더우인 라이브 랭크 매칭",
@@ -48,6 +49,15 @@ FIX = {  # wrong or inconsistent translations
     "段位：C - 精英B": "랭크 등급: C - 엘리트B",
     "段位：D- 精英C": "랭크 등급: D - 엘리트C",
     "理已完成，点击查看处理反馈{0}天前": "처리 완료, 클릭하여 처리 결과 보기 {0}일 전",
+    # v0.1.3 review
+    "ze_eizures_b{0}等{1}种": "ze_eizures_b{0} 외 {1}종",
+    "ze_resident_evil_{0}等..": "ze_resident_evil_{0} 외..",
+    "亮美电具大会员": "완미 e스포츠 VIP 멤버십",
+    "佩尸乐园-身法跳跃": "좀비 낙원-보법 점프",
+    "值¥{0}": "가치 ¥{0}",
+    "直¥{0}": "가치 ¥{0}",
+    "天械匹配 {0}/{1}": "랭크 매칭 {0}/{1}",
+    "梯匹配": "랭크 매칭",
 }
 
 DROP = [  # sentences with names baked in, now covered by the templates above
@@ -72,6 +82,9 @@ DROP = [  # sentences with names baked in, now covered by the templates above
     "客服{0}丰川祥子", "帅哥本人{0}", "纯情猪头少年", "落叶~无回",
     "共克您达成成就【DFATH】{0}在CS的旅程", "妾{0}名挑战者的挑战。自定义模备好接受挑战者的枪林弹雨了",
     "这一行不在词典里",   # a test line that leaked into the cache
+    # v0.1.3 review: friend chat previews with names / status messages
+    "我们已经是好友啦，快...想上分少压力", "我们已经是好友啦，快...春序十言",
+    "我们已经是好友啦，快...用户{0}", "我们已经是好友啦，快...藤椒皮蛋",
 ]
 
 
