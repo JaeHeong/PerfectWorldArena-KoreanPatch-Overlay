@@ -65,13 +65,15 @@ def free_space(fill: tuple[int, int, int, int], lines, width: int,
 
 
 def draw_items(items, lines, width: int, dx: int = 0, dy: int = 0,
-               height: int = 1 << 30) -> list["DrawItem"]:
-    """Window-relative analyzer Items -> screen-space DrawItems (offset by dx, dy)."""
+               height: int = 1 << 30, text=None) -> list["DrawItem"]:
+    """Window-relative analyzer Items -> screen-space DrawItems (offset by dx, dy).
+    text: optional display-only rewrite of the Korean (e.g. won amounts)."""
     out = []
     for i in items:
         fx0, fy0, fx1, fy1 = i.fill
         l, r, b = free_space(i.fill, lines, width, height, widen=i.line_count == 1)
-        out.append(DrawItem(dx + fx0, dy + fy0, dx + fx1, dy + fy1, i.ko, i.bg, i.fg,
+        ko = text(i.ko) if text else i.ko
+        out.append(DrawItem(dx + fx0, dy + fy0, dx + fx1, dy + fy1, ko, i.bg, i.fg,
                             i.line_count, i.font_px, i.art, dx + l, dx + r, dy + b))
     return out
 

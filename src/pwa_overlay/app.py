@@ -30,6 +30,7 @@ from .analyzer import (Analysis, Analyzer, Item, Line, signature_changed, to_gra
                        translate_lines)
 from .config import Config
 from .dictionary import Dictionary, has_cjk, normalize
+from .currency import FxRate, add_krw
 from .overlay import DrawItem, OverlayWindow, draw_items, paint_items
 from .translator import Translator, make_translator
 
@@ -119,6 +120,9 @@ class Controller(QObject):
         self.games = {g.lower() for g in cfg.game_exes}
         self.untranslated = UntranslatedLog(root / "logs" / "untranslated.txt")
         self.translator = self._make_translator()
+        self.fx = FxRate(root / "data" / "fx_rate.json")
+        if cfg.show_krw:
+            self.fx.refresh_async()   # background, only if the saved rate is 12+ h old
         self.analyzer = Analyzer(self.translator, cfg.ocr_params())
         self.overlay = OverlayWindow(cfg.font_family, cfg.exclude_from_capture, cfg.debug)
         self.notify = lambda title, text: None  # set by the tray
@@ -189,7 +193,8 @@ class Controller(QObject):
             rgb = np.ascontiguousarray(frame[:, :, ::-1])
             img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888).copy()
             p = QPainter(img)
-            paint_items(p, draw_items(st.items, st.lines, w, 0, 0, h), 0, 0, self.cfg.font_family)
+            paint_items(p, draw_items(st.items, st.lines, w, 0, 0, h, self._display_text), 0, 0,
+                        self.cfg.font_family)
             p.end()
             path = out / time.strftime("screen_%Y%m%d_%H%M%S.png")
             img.save(str(path))
@@ -212,6 +217,17 @@ class Controller(QObject):
         self._save_setting("ocr_device", device)
         self.notify("OCR 모드", "GPU 가속 (빠름, 메모리 약 2GB)" if on
                     else "CPU (가벼움, 메모리 약 0.5GB)")
+
+    def _display_text(self, ko: str) -> str:
+        """What is drawn for a translation: yuan amounts get a won value."""
+        if not getattr(self.cfg, "show_krw", False) or getattr(self, "fx", None) is None:
+            return ko
+        self.fx.refresh_async()   # returns at once unless the rate is due (12 h)
+        return add_krw(ko, self.fx.rate)
+
+    def set_show_krw(self, on: bool) -> None:
+        self.cfg.show_krw = on
+        self._save_setting("show_krw", on)
 
     def _save_setting(self, key: str, value) -> None:
         """Update one key in config.json, leaving the rest (and CLI overrides) alone."""
@@ -321,7 +337,8 @@ class Controller(QObject):
             st.rect = w.rect
             frame = self._grab(w.rect)
             self._update_window(st, frame, now, game_running, w is windows[0])
-            draw += draw_items(st.items, st.lines, w.rect.w, w.rect.x, w.rect.y, w.rect.h)
+            draw += draw_items(st.items, st.lines, w.rect.w, w.rect.x, w.rect.y, w.rect.h,
+                               self._display_text)
         n = sum(len(s.items) for s in self.states.values())
         pending = self.translator.pending_count()
         capped = getattr(self.translator, "capped", 0)
@@ -491,7 +508,7 @@ class Controller(QObject):
         rgb = np.ascontiguousarray(frame[:, :, ::-1])
         img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888).copy()
         p = QPainter(img)
-        paint_items(p, draw_items(result.items, result.lines, w, 0, 0, h), 0, 0,
+        paint_items(p, draw_items(result.items, result.lines, w, 0, 0, h, self._display_text), 0, 0,
                     self.cfg.font_family, True)
         p.end()
         img.save(str(out / time.strftime("frame_%H%M%S.png")))
@@ -536,6 +553,10 @@ def build_tray(app: QApplication, ctl: Controller) -> QSystemTrayIcon:
     gpu.setChecked(ctl.cfg.ocr_device == "gpu")
     gpu.toggled.connect(ctl.set_gpu)
     menu.addAction(gpu)
+    krw = QAction("위안(¥) 금액에 원화 환산 표시", menu, checkable=True)
+    krw.setChecked(ctl.cfg.show_krw)
+    krw.toggled.connect(ctl.set_show_krw)
+    menu.addAction(krw)
     menu.addSeparator()
 
     def open_path(p: Path):

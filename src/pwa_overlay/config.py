@@ -43,6 +43,7 @@ class Config:
     font_family: str = "Malgun Gothic"
     exclude_from_capture: bool = True
     require_foreground: bool = True # hide while the client is not the active window
+    show_krw: bool = True   # "¥128 (약 2.6만 원)": yuan with an approximate won value
     machine_translation: bool = True  # Claude, when ANTHROPIC_API_KEY is set
     mt_model: str = "claude-haiku-5-5"
     # disabled: an A/B on real screens showed adaptive was no better, a bit slower,

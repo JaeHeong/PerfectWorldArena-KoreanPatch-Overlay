@@ -16,3 +16,4 @@ data/translation_cache.json
 data/translation_cache.broken.json
 click/
 .claude/
+data/fx_rate.json
