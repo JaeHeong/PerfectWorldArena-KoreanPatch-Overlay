@@ -146,6 +146,11 @@ uv run python -m pwa_overlay --target python.exe --title PWA-FAKE-CLIENT --alway
   ```
 - 친구에게 따로 줄 때는 트레이의 **"번역 캐시 내보내기"**를, 받은 쪽은 **"번역 캐시 가져오기"**를 쓰면 됩니다. 내보내기에도 "그대로 둠" 항목은 들어가지 않습니다.
 
+## 제보와 후원 / Support
+- **오역·오류 제보와 건의**는 [GitHub Issues](https://github.com/JaeHeong/PerfectWorldArena-KoreanPatch-Overlay/issues)에 남겨 주세요. 트레이 메뉴의 "번역된 화면 저장"으로 찍은 화면을 함께 올려 주시면 고치기 쉽습니다.
+- 별 ⭐ 하나도 큰 힘이 됩니다.
+- 번역본 업데이트와 유지보수를 응원해 주시려면 [카카오페이로 후원](https://qr.kakaopay.com/FDh5iCL9K)할 수 있습니다. 후원은 선택 사항입니다.
+
 ## 출처와 라이선스 / License
 **비상업적 이용만 허용되는 부분이 있습니다.** 부분마다 라이선스가 다릅니다.
 
