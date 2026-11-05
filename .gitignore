@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# runtime output: dumps contain screenshots of your account page
+logs/
+config.json
+build/
+dist/
+data/translation_failures.json
+data/*.tmp
+
+# local translation cache and its state stay on this PC; the published,
+# nickname-free copy is data/translation_cache.shared.json
+data/translation_cache.json
+data/translation_cache.broken.json
+click/
+.claude/

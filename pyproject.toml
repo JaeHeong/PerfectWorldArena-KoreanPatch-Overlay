@@ -1,0 +1,40 @@
+[project]
+name = "pwa-overlay"
+version = "0.1.0"
+description = "Perfect World Arena Korean OCR overlay (does not modify the client)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "rapidocr>=3.10",
+    "onnxruntime-directml>=1.24",  # GPU (DirectML) build; replaces plain onnxruntime
+    "PyQt6>=6.6",
+    "mss>=9.0",
+    "numpy>=1.26",
+    "rapidfuzz>=3.6",
+    "anthropic>=2.4.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pillow>=10",
+    "pyinstaller>=6.22.3",
+    "psutil>=7.2.2",
+]
+
+[project.scripts]
+pwa-overlay = "pwa_overlay.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pwa_overlay"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+# rapidocr depends on the CPU-only "onnxruntime"; we ship the DirectML build instead
+# (same Python module, also runs on CPU). Never install both.
+override-dependencies = ["onnxruntime ; sys_platform == 'never'"]
