@@ -76,3 +76,12 @@ def test_description_in_a_detail_panel(tmp_path):
     painted = painted.reshape(h, img.bytesPerLine())[:, : w * 3].reshape(h, w, 3)
     below = painted[95:140, 20:300]
     assert (np.abs(below.astype(int) - 28).max(axis=2) > 60).sum() > 50
+
+
+def test_paragraph_with_a_line_right_below_is_never_cut():
+    from pwa_overlay.overlay import _fit_paragraph, _wrapped_height
+    ko = ("누구나 직접 발명한 기술을 녹화해 다른 사람과 공유할 수 있고, 다른 사람의 "
+          "기술을 찾아보거나 시도하고 저장하거나 평가할 수 있습니다. 1만이 적용")
+    # 2-line box, the next row starts right below it (no free space)
+    px, height = _fit_paragraph(FONT, ko, 370, 36, 2, 15, 36)
+    assert _wrapped_height(FONT, px, 370, ko) + 2 <= height

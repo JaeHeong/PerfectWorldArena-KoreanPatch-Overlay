@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .dictionary import Dictionary, Match, has_cjk, normalize
+from .dictionary import Dictionary, Match, has_cjk, normalize, soft_normalize
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +59,42 @@ def unmask(template: str, nums: list[str]) -> str | None:
     return _PH_RE.sub(lambda m: nums[int(m.group(1))], template)
 
 
+_NAME_PH = re.compile(r"\{n(\d+)\}")  # nickname slots in learned templates
+
+
+def compile_template(zh_t: str):
+    """Regex for a learned template like '玩家 {n0} 加入了房间{0}' (number slots
+    stay literal: lines are matched after number masking). None if the fixed part
+    has fewer than 3 Chinese characters (too loose to trust)."""
+    text = soft_normalize(zh_t).strip()
+    parts = re.split(r"(\{n\d+\})", text)
+    literal = "".join(p for p in parts if not _NAME_PH.fullmatch(p))
+    if len(_CJK_CHARS.findall(literal)) < 3 or not _NAME_PH.search(text):
+        return None
+    pattern, names = r"\s*", []
+    for part in parts:
+        m = _NAME_PH.fullmatch(part)
+        if m:
+            names.append(m.group(1))
+            pattern += r"(.+?)"
+        else:
+            pattern += r"\s*".join(re.escape(c) for c in part if not c.isspace()) + r"\s*"
+    return re.compile(pattern, re.IGNORECASE), names
+
+
+def match_template(compiled, masked: str) -> dict[str, str] | None:
+    regex, names = compiled
+    m = regex.fullmatch(soft_normalize(masked).strip())
+    if not m:
+        return None
+    values = {n: v.strip() for n, v in zip(names, m.groups())}
+    return values if all(values.values()) else None
+
+
+def fill_template(ko_t: str, values: dict[str, str]) -> str:
+    return _NAME_PH.sub(lambda m: values.get(m.group(1), m.group(0)), ko_t)
+
+
 def cache_key(masked: str) -> str:
     k = normalize(masked)
     k = _KEY_LEAD.sub("", k)
@@ -68,13 +104,35 @@ def cache_key(masked: str) -> str:
 
 class TranslationCache:
     """canonical masked zh -> entry, persisted as JSON (survives restarts).
-    Entry: {"zh", "ko" (None = KEEP: never translate), "by", "at", "uncertain"}."""
+    Entry: {"zh", "ko" (None = KEEP: never translate), "by", "at", "uncertain"}.
+    Template entries ("template": true) hold a sentence with the player names
+    replaced by {n0}, {n1}...: any line of that shape is translated from them, and
+    no nickname is ever stored."""
 
     def __init__(self, path: Path):
         self.path = path
         self.lock = threading.Lock()
         self._removed: set[str] = set()
         self.data: dict[str, dict] = self._read()
+        self._compiled: list | None = None
+
+    def match_template(self, masked: str) -> str | None:
+        """Korean (number slots still masked) for a line that fits a learned
+        template, with the names from the line filled in."""
+        with self.lock:
+            if self._compiled is None:
+                self._compiled = []
+                for e in self.data.values():
+                    if e.get("template") and e.get("ko"):
+                        c = compile_template(e["zh"])
+                        if c:
+                            self._compiled.append((c, e["ko"]))
+            compiled = list(self._compiled)
+        for c, ko_t in compiled:
+            values = match_template(c, masked)
+            if values is not None:
+                return fill_template(ko_t, values)
+        return None
 
     def _read(self) -> dict[str, dict]:
         if not self.path.exists():
@@ -108,21 +166,25 @@ class TranslationCache:
         for k in self._removed:
             disk.pop(k, None)
         self.data = disk
+        self._compiled = None
         snapshot = json.dumps(self.data, ensure_ascii=False, indent=1, sort_keys=True)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(snapshot, encoding="utf-8")
         os.replace(tmp, self.path)  # atomic: a crash never leaves a half-written file
 
-    def put_many(self, entries: list[tuple[str, str | None, bool]], source: str) -> None:
-        """entries: (masked zh, masked ko or None for KEEP, uncertain)."""
+    def put_many(self, entries: list[tuple], source: str) -> None:
+        """entries: (masked zh, masked ko or None for KEEP, uncertain[, template])."""
         with self.lock:
             now = time.strftime("%Y-%m-%d %H:%M:%S")
-            for masked_zh, masked_ko, uncertain in entries:
+            for masked_zh, masked_ko, uncertain, *rest in entries:
                 k = cache_key(masked_zh)
                 self._removed.discard(k)
-                self.data[k] = {"zh": masked_zh, "ko": masked_ko, "by": source, "at": now,
-                                "uncertain": bool(uncertain)}
+                e = {"zh": masked_zh, "ko": masked_ko, "by": source, "at": now,
+                     "uncertain": bool(uncertain)}
+                if rest and rest[0]:
+                    e["template"] = True
+                self.data[k] = e
             self._write()
 
     @staticmethod
@@ -133,9 +195,13 @@ class TranslationCache:
             return False
         ko = e.get("ko")
         if ko is None:
-            return True
-        return (isinstance(ko, str) and bool(ko.strip()) and not has_cjk(ko)
-                and set(_PH_RE.findall(ko)) == set(_PH_RE.findall(e["zh"])))
+            return not e.get("template")
+        ok = (isinstance(ko, str) and bool(ko.strip()) and not has_cjk(ko)
+              and set(_PH_RE.findall(ko)) == set(_PH_RE.findall(e["zh"])))
+        if e.get("template"):
+            ok = ok and set(_NAME_PH.findall(ko)) == set(_NAME_PH.findall(e["zh"])) \
+                and compile_template(e["zh"]) is not None
+        return ok
 
     def merge_file(self, path: Path) -> tuple[int, int, int]:
         """Merge a shared translation_cache.json into this one. New sentences are
@@ -164,6 +230,8 @@ class TranslationCache:
                     continue
                 entry = {"zh": e["zh"], "ko": e.get("ko"), "by": str(e.get("by", "shared")),
                          "at": str(e.get("at", "")), "uncertain": bool(e.get("uncertain"))}
+                if e.get("template"):
+                    entry["template"] = True
                 self.data[k] = entry
                 self._removed.discard(k)
             if added + updated == 0 and skipped == len(raw):
@@ -268,6 +336,12 @@ most plausible intended UI text, not the literal characters.
 translation per [id], using that number as "id"; never translate the context.
 - Player, team and clan nicknames, IDs, and unreadable fragments that are not real \
 UI text: return ko = "" (they stay as they are on screen).
+- If a line contains a player, team or clan nickname inside a sentence (system \
+messages like "玩家 某某 已加入房间"), also return zh_template and ko_template: the \
+line and its translation with each nickname replaced by {n0}, {n1}... in order \
+(keep {0}, {1} number slots as they are; zh_template must be the line exactly, \
+except the nicknames). Item, skin or event names in quotes are NOT nicknames. For \
+every other line return both as "".
 - Write Korean only: never leave Chinese characters in the output, not even one \
 (e.g. 国服 -> 중국 서버, never "국服").
 - "W" after a number is 万 (10,000): 100W -> 100만, 500W -> 500만.
@@ -290,8 +364,10 @@ OUTPUT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"id": {"type": "integer"}, "ko": {"type": "string"}},
-                "required": ["id", "ko"],
+                "properties": {"id": {"type": "integer"}, "ko": {"type": "string"},
+                               "zh_template": {"type": "string"},
+                               "ko_template": {"type": "string"}},
+                "required": ["id", "ko", "zh_template", "ko_template"],
                 "additionalProperties": False,
             },
         }
@@ -442,9 +518,15 @@ class ClaudeBackend:
             data = json.loads(text)
         except json.JSONDecodeError as e:
             raise BatchError(f"bad JSON: {e}") from e
-        return {t["id"] - ID_BASE: t["ko"] for t in data.get("translations", [])
-                if isinstance(t.get("ko"), str) and isinstance(t.get("id"), int)
-                and 0 <= t["id"] - ID_BASE < len(texts)}
+        out: dict[int, object] = {}
+        for t in data.get("translations", []):
+            i = t.get("id")
+            if not (isinstance(t.get("ko"), str) and isinstance(i, int)
+                    and 0 <= i - ID_BASE < len(texts)):
+                continue
+            zt, kt = t.get("zh_template") or "", t.get("ko_template") or ""
+            out[i - ID_BASE] = (t["ko"], zt, kt) if zt and kt else t["ko"]
+        return out
 
 
 class Translator:
@@ -521,6 +603,11 @@ class Translator:
             filled = unmask(entry["ko"], nums)
             if filled is not None:
                 return Match(filled, "cache")
+        ko_t = self.cache.match_template(masked)
+        if ko_t is not None:
+            filled = unmask(ko_t, nums)
+            if filled is not None:
+                return Match(filled, "template")
         if uncertain and chars:
             m = self._confident_char_match(chars)
             if m:
@@ -678,6 +765,10 @@ class Translator:
         screen = list(batch[0].context)[:60]
         glossary = self._glossary(texts, screen)
         result, failed = self._call(texts, glossary, screen, uncertain, budgets)
+        templates = {}
+        for i, v in list(result.items()):
+            if isinstance(v, tuple):
+                result[i], templates[i] = v[0], (v[1], v[2])
 
         # Hangul mixed with leftover Chinese: one cheap retry, those lines only
         mixed = [i for i, ko in result.items() if has_cjk(ko) and _HANGUL.search(ko)]
@@ -687,7 +778,8 @@ class Translator:
                                   retry=True)
             for j, i in enumerate(mixed):
                 if j in again:
-                    result[i] = again[j]
+                    v = again[j]
+                    result[i] = v[0] if isinstance(v, tuple) else v
 
         good: list[tuple[str, str | None, bool]] = []
         bad: list[str] = [keys[i] for i in failed]
@@ -713,7 +805,15 @@ class Translator:
                 log.warning("unusable translation for %s -> %r", masked, ko)
                 bad.append(keys[i])
                 continue
-            good.append((masked, ko, uncertain[i]))
+            tpl = self._valid_template(masked, ko, templates.get(i))
+            if not tpl and _NAME_PH.search(ko):
+                bad.append(keys[i])   # a slot with nothing to fill it from
+                continue
+            if tpl:
+                # store the shape, not the line: the nickname never reaches the cache
+                good.append((tpl[0], tpl[1], uncertain[i], True))
+            else:
+                good.append((masked, ko, uncertain[i]))
         if bad:
             self.failures.record(bad)
         if good:
@@ -721,6 +821,25 @@ class Translator:
             self.version += 1
         self.status = (f"Claude 번역 사용 · 캐시 {len(self.cache)}개 · "
                        f"오늘 {self.backend.usage.day_calls}회")
+
+    @staticmethod
+    def _valid_template(masked: str, ko: str, tpl) -> tuple[str, str] | None:
+        """A nickname template is kept only if it reproduces the line it came from,
+        has a real fixed part, and uses the same slots on both sides."""
+        if not tpl:
+            return None
+        zh_t, ko_t = tpl[0].strip(), tpl[1].strip()
+        names = set(_NAME_PH.findall(zh_t))
+        if not names or names != set(_NAME_PH.findall(ko_t)) or has_cjk(ko_t):
+            return None
+        if not (set(_PH_RE.findall(zh_t)) == set(_PH_RE.findall(ko_t))
+                == set(_PH_RE.findall(masked))):
+            return None
+        compiled = compile_template(zh_t)
+        if compiled is None or match_template(compiled, masked) is None:
+            log.info("template rejected (does not reproduce the line): %s", zh_t)
+            return None
+        return zh_t, ko_t
 
     def _may_keep(self, masked: str) -> bool:
         """Only name-like lines may be left untranslated for good: no numbers, no

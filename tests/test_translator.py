@@ -313,3 +313,40 @@ def test_sentence_answered_without_korean_is_rejected(tmp_path, small_dict):
     time.sleep(0.1)
     assert t.lookup("描述：天梯比赛失败扣分导致段位下降") is None   # not cached
     t.close()
+
+
+def test_nickname_sentence_learned_as_template(tmp_path, small_dict):
+    line = "玩家 Wind 加入了房间"
+    be = FakeBackend({line: ("플레이어 Wind 님이 방에 입장했습니다",
+                             "玩家 {n0} 加入了房间", "플레이어 {n0} 님이 방에 입장했습니다")})
+    t = make(tmp_path, small_dict, be)
+    t.lookup(line)
+    assert wait_for(lambda: t.version > 0)
+    assert t.lookup("玩家 Wind 加入了房间").ko == "플레이어 Wind 님이 방에 입장했습니다"
+    m = t.lookup("玩家 xX_Pro_Xx 加入了房间")      # another player: no new call
+    assert m.ko == "플레이어 xX_Pro_Xx 님이 방에 입장했습니다"
+    time.sleep(0.1)
+    assert len(be.calls) == 1
+    t.close()
+    raw = (tmp_path / "c.json").read_text(encoding="utf-8")
+    assert "Wind" not in raw and "{n0}" in raw     # the shape is stored, not the name
+
+
+def test_template_that_does_not_reproduce_the_line_is_dropped(tmp_path, small_dict):
+    line = "玩家 Wind 加入了房间"
+    be = FakeBackend({line: ("플레이어 Wind 님이 방에 입장했습니다",
+                             "玩家 {n0} 离开了房间", "플레이어 {n0} 님이 퇴장했습니다")})
+    t = make(tmp_path, small_dict, be)
+    t.lookup(line)
+    assert wait_for(lambda: t.version > 0)
+    assert t.lookup(line).ko == "플레이어 Wind 님이 방에 입장했습니다"  # stored as a sentence
+    assert t.lookup("玩家 Other 离开了房间") is None
+    t.close()
+
+
+def test_template_needs_a_real_fixed_part():
+    from pwa_overlay.translator import compile_template
+    assert compile_template("{n0}：{n1}") is None
+    assert compile_template("{n0}了") is None
+    assert compile_template("{n0}的包") is None
+    assert compile_template("恭喜 {n0} 获得") is not None

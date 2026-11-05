@@ -121,12 +121,13 @@ def _fit_paragraph(family: str, text: str, w: int, h: int, lines: int, base_px: 
     floor = max(MIN_PX_PARAGRAPH, int(px * 0.8))  # shrink a little, then use space below
     while px > floor and _wrapped_height(family, px, w, text) > h + 2:
         px -= 1
+    limit = max(h, avail_h)
+    while px > MIN_PX_PARAGRAPH and _wrapped_height(family, px, w, text) + 2 > limit:
+        px -= 1
     th = _wrapped_height(family, px, w, text) + 2
-    if th > h and avail_h > h:
-        while px > MIN_PX_PARAGRAPH and _wrapped_height(family, px, w, text) + 2 > avail_h:
-            px -= 1
-        th = _wrapped_height(family, px, w, text) + 2
-    return px, max(h, min(th, max(h, avail_h)))
+    # never cut it to the box: text taller than its plate is centred and loses its
+    # first and last lines under the neighbouring items
+    return px, max(h, th)
 
 
 def _contrast_pen(c: tuple[int, int, int]) -> QColor:
